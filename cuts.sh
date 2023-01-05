@@ -1,3 +1,4 @@
 cuts=(
-background
-character)
+"background"
+"character"
+)
