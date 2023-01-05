@@ -1,0 +1,3 @@
+cuts=(
+background
+character)
