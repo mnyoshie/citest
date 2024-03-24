@@ -2,7 +2,6 @@
 set -ev
 
 pushd ..
-find -name \*.png -exec rm {} \;
-find -name \*.zip -exec rm {} \;
-rm -rf flattened
+rm -rf flattened credits
+rm layers-*.txt
 popd

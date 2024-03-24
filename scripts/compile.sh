@@ -1,13 +1,14 @@
 #!/bin/bash
 set -ev
 
-source config.sh
+source ./config.sh
 
 pushd ../flattened
-ffmpeg -r $frame_rate -i %04d.png \
-	-crf 30 \
+$FFMPEG -r $ANIMATION_FRAME_RATE -i "%"${ANIMATION_BUILD_FRAMES_ZEROS}d.png \
+	-tune film \
 	-movflags +faststart \
 	-vcodec libx264 \
+	-profile:v high \
 	-pix_fmt yuv420p \
-	twp-$(date -I).mp4
+	${ANIMATION_CODENAME}-$(date -I).mp4
 popd
