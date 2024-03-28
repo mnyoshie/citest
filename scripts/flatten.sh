@@ -21,7 +21,8 @@ for f in $(seq -f "%"${ANIMATION_BUILD_FRAMES_ZEROS}g 0 $ANIMATION_FRAMES); do
 	done
 	echo FLATTEN $f
 	$IM_CONVERT $(cat layers-${f}.txt) -colorspace RGB -flatten flattened/$f.png
-	rm $(cat layers-${f}.txt) && rm layers-${f}.txt
+#	rm $(cat layers-${f}.txt)
+	rm layers-${f}.txt
 	) &
 
 	# multithreading hack

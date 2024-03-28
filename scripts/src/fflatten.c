@@ -1,4 +1,4 @@
-/* fflaten.c - fast flatten (DRAFT)
+/* fflaten.c - fast flatten
  *
  * Copyright (C) 2024 Minato Yoshie
  *
@@ -107,6 +107,14 @@ static inline uint32x4_t vcgtq_f32(float32x4_t a, float32x4_t b) {
 
 static inline uint32x4_t vcltq_f32(float32x4_t a, float32x4_t b) {
   return (uint32x4_t){a.x < b.x, a.y < b.y, a.z < b.z, a.w < b.w};
+}
+
+static inline uint32x4_t vcgeq_f32(float32x4_t a, float32x4_t b) {
+  return (uint32x4_t){a.x >= b.x, a.y >= b.y, a.z >= b.z, a.w >= b.w};
+}
+
+static inline uint32x4_t vcleq_f32(float32x4_t a, float32x4_t b) {
+  return (uint32x4_t){a.x <= b.x, a.y <= b.y, a.z <= b.z, a.w <= b.w};
 }
 
 static inline uint32x4_t vceqq_f32(float32x4_t a, float32x4_t b) {
@@ -238,7 +246,7 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
 #define BLEND_DARKEN       ((char)'D')
 #define BLEND_DIFFERENCE   ((char)'d')
 #define BLEND_DIVIDE       ((char)'/')
-#define BLEND_ERASE        ((char)'x')
+#define BLEND_HUE          ((char)'h')
 #define BLEND_HARD_LIGHT   ((char)'H')
 #define BLEND_LIGHTEN      ((char)'L')
 #define BLEND_LUMINOSITY   ((char)'u')
@@ -260,6 +268,8 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
       for (int x = 0; x < base->width; x++) {                                    \
         float32_t *(bpx) = (void *)(brow + x * 4);                               \
         float32_t *(tpx) = (void *)(trow + x * 4);                               \
+        bpx[3] *= base->opacity;                                                 \
+        tpx[3] *= top->opacity;                                                  \
         BLEND_BODY_##name;                                                       \
       }                                                                          \
     }                                                                            \
@@ -292,8 +302,6 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
   do {                                                         \
     float32x4_t freg_base = vld1q_f32(bpx);                    \
     float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
     freg_base = FFCO(1.0, (1.0 - tpx[3]), freg_top);           \
     vst1q_f32(bpx, freg_base);                                 \
     bpx[3] = 1.0; \
@@ -304,8 +312,6 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
     const float32x4_t ffour_ones = {1.0, 1.0, 1.0, 1.0};       \
     float32x4_t freg_base = vld1q_f32(bpx);                    \
     float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
     freg_base = vaddq_f32(freg_base, freg_top);                \
     uint32x4_t mask = vcgtq_f32(freg_base, ffour_ones);        \
     freg_base = vbslq_f32(mask, ffour_ones, freg_base);        \
@@ -320,8 +326,6 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
     const float32x4_t ffour_cones = {0.97, 0.97, 0.97, 0.97};  \
     float32x4_t freg_base = vld1q_f32(bpx);                    \
     float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
     uint32x4_t freg_eq0 = vcltq_f32(freg_base, ffour_czeros);  \
     uint32x4_t freg_eq1 = vcgtq_f32(freg_top, ffour_cones);    \
     float32x4_t freg_rec =                                     \
@@ -339,8 +343,6 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
     const float32x4_t ffour_ones = {1.0, 1.0, 1.0, 1.0};       \
     float32x4_t freg_base = vld1q_f32(bpx);                    \
     float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
     uint32x4_t mask = vcgtq_f32(freg_base, freg_top);          \
     float32x4_t freg_max =                                     \
       vbslq_f32(mask, freg_base, freg_top);                    \
@@ -361,8 +363,6 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
     const float32x4_t ffour_ones = {1.0, 1.0, 1.0, 1.0};       \
     float32x4_t freg_base = vld1q_f32(bpx);                    \
     float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
     float32x4_t freg_screen = FFSCREEN(freg_base, freg_top);   \
     freg_base = FFCO(1.0, 1.0-tpx[3], freg_screen);            \
     uint32x4_t mask = vcgtq_f32(freg_base, ffour_ones);        \
@@ -377,8 +377,6 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
     const float32x4_t ffour_halfs = {0.5, 0.5, 0.5, 0.5};      \
     float32x4_t freg_base = vld1q_f32(bpx);                    \
     float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
     float32x4_t freg_mult = FFMULTIPLY(freg_base,              \
       vmulq_n_f32(freg_top, 2.0));                             \
     float32x4_t freg_screen = FFSCREEN(freg_base,              \
@@ -391,57 +389,67 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
   } while (0)
 
 
-#define BLEND_BODY_SOFT_LIGHT                                  \
+#define BLEND_BODY_OVERLAY                                     \
   do {                                                         \
-    const float32x4_t ffour_fours = {4.0, 4.0, 4.0, 4.0};       \
-    const float32x4_t ffour_twelves = {12.0, 12.0, 12.0, 12.0};       \
     const float32x4_t ffour_ones = {1.0, 1.0, 1.0, 1.0};       \
     const float32x4_t ffour_halfs = {0.5, 0.5, 0.5, 0.5};      \
-    const float32x4_t ffour_hhalfs = {0.25, 0.25, 0.25, 0.25};      \
     float32x4_t freg_base = vld1q_f32(bpx);                    \
     float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
-    float32x4_t freg_d025 = vmulq_f32(vaddq_f32(vmulq_f32(vsubq_f32( vmulq_n_f32(freg_base, 16.0), ffour_twelves), freg_base), ffour_fours), freg_base);         \
-    float32x4_t freg_e025 = vsqrtq_f32(freg_base); \
-    float32x4_t freg_d050 = vsubq_f32(freg_base, vmulq_f32(vsubq_f32(ffour_ones, vmulq_n_f32(freg_top, 2.0)), vmulq_f32(freg_base, vsubq_f32(ffour_ones, freg_base)))); \
-    uint32x4_t mask = vcltq_f32(freg_base, ffour_hhalfs);        \
-    float32x4_t freg_e050 = vaddq_f32(freg_base, vmulq_f32(vsubq_f32(vmulq_n_f32(freg_top, 2.0), ffour_ones), vsubq_f32(vbslq_f32(mask, freg_d025, freg_e025), freg_base))); \
-    mask = vcltq_f32(freg_top, ffour_halfs);        \
-    freg_base = vbslq_f32(mask, freg_d050, freg_e050); \
+    float32x4_t freg_mult = FFMULTIPLY(freg_top,               \
+      vmulq_n_f32(freg_base, 2.0));                            \
+    float32x4_t freg_screen = FFSCREEN(freg_top,               \
+      vsubq_f32(vmulq_n_f32(freg_base, 2.0), ffour_ones));     \
+    uint32x4_t mask = vcltq_f32(freg_base, ffour_halfs);       \
+    freg_base = FFCO(1.0, 1.0-tpx[3],                          \
+      vbslq_f32(mask, freg_mult, freg_screen));                \
     vst1q_f32(bpx, freg_base);                                 \
     bpx[3] = 1.0;                                              \
   } while (0)
 
-#define BLEND_BODY_LUMINOSITY                                  \
-  do {                                                         \
-    float32x4_t freg_base = vld1q_f32(bpx);                    \
-    float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
-    float32x4_t freg_bhsl = rgb2hsl(freg_base);                \
-    float32x4_t freg_thsl = {                                  \
-      vgetq_lane_f32(freg_bhsl, 0),                            \
-      vgetq_lane_f32(freg_bhsl, 1),                            \
-      rgb2lum(freg_top),                                       \
-      1.0                                                      \
-    };                                                         \
-    freg_base = FFCO(1.0, 1.0 - tpx[3], hsl2rgb(freg_thsl));   \
-    vst1q_f32(bpx, freg_base);                                 \
+#define BLEND_BODY_SOFT_LIGHT                                                 \
+  do {                                                                        \
+    const float32x4_t ffour_fours = {4.0, 4.0, 4.0, 4.0};                     \
+    const float32x4_t ffour_twelves = {12.0, 12.0, 12.0, 12.0};               \
+    const float32x4_t ffour_ones = {1.0, 1.0, 1.0, 1.0};                      \
+    const float32x4_t ffour_halfs = {0.5, 0.5, 0.5, 0.5};                     \
+    const float32x4_t ffour_hhalfs = {0.25, 0.25, 0.25, 0.25};                \
+    float32x4_t freg_base = vld1q_f32(bpx);                                   \
+    float32x4_t freg_top = vld1q_f32(tpx);                                    \
+    float32x4_t freg_d025 = vmulq_f32(                                        \
+        vaddq_f32(                                                            \
+            vmulq_f32(vsubq_f32(vmulq_n_f32(freg_base, 16.0), ffour_twelves), \
+                      freg_base),                                             \
+            ffour_fours),                                                     \
+        freg_base);                                                           \
+    float32x4_t freg_e025 = vsqrtq_f32(freg_base);                            \
+    float32x4_t freg_d050 = vsubq_f32(                                        \
+        freg_base,                                                            \
+        vmulq_f32(vsubq_f32(ffour_ones, vmulq_n_f32(freg_top, 2.0)),          \
+                  vmulq_f32(freg_base, vsubq_f32(ffour_ones, freg_base))));   \
+    uint32x4_t mask = vcleq_f32(freg_base, ffour_hhalfs);                     \
+    float32x4_t freg_e050 = vaddq_f32(                                        \
+        freg_base,                                                            \
+        vmulq_f32(                                                            \
+            vsubq_f32(vmulq_n_f32(freg_top, 2.0), ffour_ones),                \
+            vsubq_f32(vbslq_f32(mask, freg_d025, freg_e025), freg_base)));    \
+    mask = vcleq_f32(freg_top, ffour_halfs);                                  \
+    freg_base =                                                               \
+        FFCO(1.0, 1.0 - tpx[3], vbslq_f32(mask, freg_d050, freg_e050));       \
+    vst1q_f32(bpx, freg_base);                                                \
+    bpx[3] = 1.0;                                                             \
   } while (0)
+
 
 #define BLEND_BODY_DARKEN                                      \
   do {                                                         \
     const float32x4_t ffour_ones = {1.0, 1.0, 1.0, 1.0};       \
     float32x4_t freg_base = vld1q_f32(bpx);                    \
     float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
     uint32x4_t mask = vcltq_f32(freg_top, freg_base);          \
     freg_base = FFCO(1.0, 1.0-tpx[3],                          \
       vbslq_f32(mask, freg_top, freg_base));                   \
     vst1q_f32(bpx, freg_base);                                 \
-    bpx[3] = 1.0;          \
+    bpx[3] = 1.0;                                              \
   } while (0)
 
 #define BLEND_BODY_LIGHTEN                                     \
@@ -449,8 +457,6 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
     const float32x4_t ffour_ones = {1.0, 1.0, 1.0, 1.0};       \
     float32x4_t freg_base = vld1q_f32(bpx);                    \
     float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
     uint32x4_t mask = vcgtq_f32(freg_top, freg_base);          \
     freg_base = FFCO(1.0, 1.0-tpx[3],                          \
       vbslq_f32(mask, freg_top, freg_base));                   \
@@ -463,12 +469,11 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
     const float32x4_t ffour_ones = {1.0, 1.0, 1.0, 1.0};       \
     float32x4_t freg_base = vld1q_f32(bpx);                    \
     float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
     float32x4_t freg_rec = vrecpeq_f32(freg_top);              \
-    float32x4_t freg_mul = vmulq_f32(freg_base, freg_rec);                \
-    uint32x4_t mask = vcgtq_f32(freg_mul, ffour_ones);        \
-    freg_base = FFCO(1.0, 1.0-tpx[3], vbslq_f32(mask, ffour_ones, freg_mul));        \
+    float32x4_t freg_mul = vmulq_f32(freg_base, freg_rec);     \
+    uint32x4_t mask = vcgtq_f32(freg_mul, ffour_ones);         \
+    freg_base = FFCO(1.0, 1.0-tpx[3],                          \
+      vbslq_f32(mask, ffour_ones, freg_mul));                  \
     vst1q_f32(bpx, freg_base);                                 \
   } while (0)
 
@@ -476,8 +481,6 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
   do {                                                         \
     float32x4_t freg_base = vld1q_f32(bpx);                    \
     float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
     float32x4_t freg_tmp = FFMULTIPLY(freg_base, freg_top);    \
     freg_base = FFCO(1.0, (1.0 - tpx[3]), freg_tmp);           \
     vst1q_f32(bpx, freg_base);                                 \
@@ -525,12 +528,6 @@ static inline float32x4_t vsqrtq_f32(float32x4_t a) {
 static inline float32_t rgb2lum(float32x4_t rgb) {
  
   const float32x4_t wcc= {0.3, 0.59, 0.11, 0.0}; 
-//  float32_t max = 0.0;
-//  float32_t min = 1.0;
-//  float32_t r = vgetq_lane_f32(rgb, 0);
-//  float32_t g = vgetq_lane_f32(rgb, 1);
-//  float32_t b = vgetq_lane_f32(rgb, 2);
-//  float32_t l =  0.3 * r + 0.59 * g + 0.11 * b;
   return vaddvq_f32(vmulq_f32(rgb, wcc));
 }
 
@@ -599,15 +596,49 @@ static inline float32x4_t set_sat(float32x4_t rgb, float32_t s) {
 }
 
 // XXX NON-SEPARABLE BLEND MODES
-#define BLEND_BODY_COLOR                                       \
-  do {                                                         \
-    float32x4_t freg_base = vld1q_f32(bpx);                    \
-    float32x4_t freg_top = vld1q_f32(tpx);                     \
-    freg_base = vmulq_n_f32(freg_base, base->opacity);         \
-    freg_top = vmulq_n_f32(freg_top, top->opacity);            \
-    freg_base = FFCO(1.0, 1.0 - tpx[3], set_lum(freg_top, rgb2lum(freg_base)));   \
-    vst1q_f32(bpx, freg_base);                                 \
-    bpx[3] = 1.0; \
+#define BLEND_BODY_COLOR                                                \
+  do {                                                                  \
+    float32x4_t freg_base = vld1q_f32(bpx);                             \
+    float32x4_t freg_top = vld1q_f32(tpx);                              \
+    freg_base =                                                         \
+        FFCO(1.0, 1.0 - tpx[3], set_lum(freg_top, rgb2lum(freg_base))); \
+    vst1q_f32(bpx, freg_base);                                          \
+    bpx[3] = 1.0;                                                       \
+  } while (0)
+
+#define BLEND_BODY_HUE                                                       \
+  do {                                                                       \
+    float32x4_t freg_base = vld1q_f32(bpx);                                  \
+    float32x4_t freg_top = vld1q_f32(tpx);                                   \
+    freg_base = FFCO(                                                        \
+        1.0, 1.0 - tpx[3],                                                   \
+        set_lum(set_sat(freg_top, rgb2sat(freg_base)), rgb2lum(freg_base))); \
+    vst1q_f32(bpx, freg_base);                                               \
+    bpx[3] = 1.0;                                                            \
+  } while (0)
+
+#define BLEND_BODY_SATURATION                                                \
+  do {                                                                       \
+    float32x4_t freg_base = vld1q_f32(bpx);                                  \
+    float32x4_t freg_top = vld1q_f32(tpx);                                   \
+    freg_base = vmulq_n_f32(freg_base, base->opacity);                       \
+    freg_top = vmulq_n_f32(freg_top, top->opacity);                          \
+    freg_base = FFCO(                                                        \
+        1.0, 1.0 - tpx[3],                                                   \
+        set_lum(set_sat(freg_base, rgb2sat(freg_top)), rgb2lum(freg_base))); \
+    vst1q_f32(bpx, freg_base);                                               \
+    bpx[3] = 1.0;                                                            \
+  } while (0)
+
+#define BLEND_BODY_LUMINOSITY                                           \
+  do {                                                                  \
+    float32x4_t freg_base = vld1q_f32(bpx);                             \
+    float32x4_t freg_top = vld1q_f32(tpx);                              \
+    freg_base = vmulq_n_f32(freg_base, base->opacity);                  \
+    freg_top = vmulq_n_f32(freg_top, top->opacity);                     \
+    freg_base =                                                         \
+        FFCO(1.0, 1.0 - tpx[3], set_lum(freg_base, rgb2lum(freg_top))); \
+    vst1q_f32(bpx, freg_base);                                          \
   } while (0)
 
 /* Four channels RGBA, normalized */
@@ -633,19 +664,6 @@ static inline float32x4_t rgb2hsl(float32x4_t rgb) {
   float32_t g = vgetq_lane_f32(rgb, 1);
   float32_t b = vgetq_lane_f32(rgb, 2);
 
-//  if (r >= max)
-//    max = r;
-//  if (g >= max)
-//    max = g;
-//  if (b >= max)
-//    max = b;
-//
-//  if (r <= min)
-//    min = r;
-//  if (g <= min)
-//    min = g;
-//  if (b <= min)
-//    min = b;
   max = FFMAX(r, g, b);
   min = FFMIN(r, g, b);
   float32_t risgt = 0.0, gisgt = 0.0, bisgt = 0.0; 
@@ -718,29 +736,6 @@ static inline float32x4_t hsl2rgb(float32x4_t hsl) {
 }
 
     
-///* XXX PORTABLE BLOCKS */
-//#define BLEND_BODY_NORMAL                                                        \
-//  do {                                                                           \
-//    dpx[0] = (spx[0]*top->opacity*spx[3]) + (dpx[0]*base->opacity*(1.0-spx[3])); \
-//    dpx[1] = (spx[1]*top->opacity*spx[3]) + (dpx[1]*base->opacity*(1.0-spx[3])); \
-//    dpx[2] = (spx[2]*top->opacity*spx[3]) + (dpx[2]*base->opacity*(1.0-spx[3])); \
-//    dpx[3] = (spx[3]*top->opacity*spx[3]) + (dpx[3]*base->opacity*(1.0-spx[3])); \
-//  } while (0)
-//
-//#define BLEND_BODY_ADDITION                                                     \
-//  do {                                                                          \
-//    dpx[0] = (spx[0] * top->opacity) + (dpx[0] * base->opacity);                \
-//    dpx[1] = (spx[1] * top->opacity) + (dpx[1] * base->opacity);                \
-//    dpx[2] = (spx[2] * top->opacity) + (dpx[2] * base->opacity);                \
-//    dpx[3] = (spx[3] * top->opacity) + (dpx[3] * base->opacity);                \
-//    if (dpx[0] > 1.0) dpx[0] = 1.0;                                             \
-//    if (dpx[0] > 1.0) dpx[0] = 1.0;                                             \
-//    if (dpx[0] > 1.0) dpx[0] = 1.0;                                             \
-//    if (dpx[0] > 1.0) dpx[0] = 1.0;                                             \
-//                                                                                \
-//  } while (0)
-//
-
 void free_imgf32(imgf32_t *img) {
   for (uint32_t y = 0; y < img->height; y++)
     free(img->rows[y]);
@@ -766,10 +761,13 @@ DEFINE_BLEND_FUNC(COLOR_DODGE);
 DEFINE_BLEND_FUNC(DIFFERENCE);
 DEFINE_BLEND_FUNC(DARKEN);
 DEFINE_BLEND_FUNC(DIVIDE);
+DEFINE_BLEND_FUNC(HUE);
 DEFINE_BLEND_FUNC(LIGHTEN);
+DEFINE_BLEND_FUNC(OVERLAY);
 DEFINE_BLEND_FUNC(LUMINOSITY);
 DEFINE_BLEND_FUNC(MULTIPLY);
 DEFINE_BLEND_FUNC(SCREEN);
+DEFINE_BLEND_FUNC(SATURATION);
 DEFINE_BLEND_FUNC(SOFT_LIGHT);
 DEFINE_BLEND_FUNC(HARD_LIGHT);
 
@@ -976,9 +974,9 @@ imgf32_t *open_pngf32(char *fstr) {
 //     vgetq_lane_f32(thsl, 1),
 //     vgetq_lane_f32(thsl, 2));
     fprintf(stderr, "t r %f g %f g %f\n\n",
-     vgetq_lane_f32(trgb, 0),
-     vgetq_lane_f32(trgb, 1),
-     vgetq_lane_f32(trgb, 2));
+    vgetq_lane_f32(trgb, 0),
+    vgetq_lane_f32(trgb, 1),
+    vgetq_lane_f32(trgb, 2));
 #endif /* FFDEBUG */
     
   }
@@ -989,7 +987,6 @@ imgf32_t *open_pngf32(char *fstr) {
 }
 
 int main(int argc, char *argv[]) {
-  FILE *fp1, *fp2;
   int  ret = 1;
   if (argc == 2 && !strcmp(argv[1], "license")) {
     fprintf(stderr, 
@@ -1011,7 +1008,7 @@ int main(int argc, char *argv[]) {
    );
    return 0;
   }
-  if (argc != 4) {
+  if (argc & 1) {
     fprintf(stderr, "fflatten "
 #ifdef FFLATTEN_INTRINSICS_USED
       "with"
@@ -1019,7 +1016,7 @@ int main(int argc, char *argv[]) {
       "without"
 #endif
     " intrinscs \n");
-    fprintf(stderr, "usage: %s base.png[:opacity] <operator> top.png[:opacity]\n", argv[0]);
+    fprintf(stderr, "usage: %s base.png[:opacity] (<operator> top.png[:opacity])*\n", argv[0]);
     fprintf(stderr, "usage: %s license\n", argv[0]);
     fprintf(stderr, "operator:\n");
     PRINT_BLEND_OP(NORMAL     );
@@ -1028,7 +1025,7 @@ int main(int argc, char *argv[]) {
     PRINT_BLEND_OP(COLOR_DODGE);
     PRINT_BLEND_OP(DARKEN     );
     PRINT_BLEND_OP(DIVIDE     );
-    PRINT_BLEND_OP(ERASE      );
+    PRINT_BLEND_OP(HUE        );
     PRINT_BLEND_OP(LIGHTEN    );
     PRINT_BLEND_OP(LUMINOSITY );
     PRINT_BLEND_OP(MULTIPLY   );
@@ -1041,58 +1038,66 @@ int main(int argc, char *argv[]) {
     return 1; 
   }
 
-  imgf32_t *img1 = open_pngf32(argv[1]);
-  imgf32_t *img2 = open_pngf32(argv[3]);
+  imgf32_t *base_img = open_pngf32(argv[1]);
+  if (base_img == NULL)
+      goto clean;
+  imgf32_t *top_img = NULL;
 
-  if (img1 == NULL || img2 == NULL)
-    goto clean;
-
-  if (img1->width != img2->width ||
-      img1->height != img2->height) {
-    fprintf(stderr, "base and top must have the same width and height\n");
-    goto clean;
+  for (int cur = 2; cur < argc; ) {
+    char op = argv[cur++][0];
+    top_img = open_pngf32(argv[cur++]);
+    if (top_img == NULL)
+      goto clean;
+  
+    if (base_img->width != top_img->width ||
+        base_img->height != top_img->height) {
+      fprintf(stderr, "base and top must have the same width and height\n");
+      goto clean;
+    }
+  
+    int width = base_img->width, height = base_img->height;
+  
+    //printf("here\n");
+    switch (op) {
+    DEFINE_BLEND_CASE(NORMAL     ,base_img, top_img);
+    DEFINE_BLEND_CASE(NONE       ,base_img, top_img);
+    DEFINE_BLEND_CASE(ADDITION   ,base_img, top_img);
+    DEFINE_BLEND_CASE(COLOR      ,base_img, top_img);
+    DEFINE_BLEND_CASE(COLOR_DODGE,base_img, top_img);
+    DEFINE_BLEND_CASE(DIFFERENCE ,base_img, top_img);
+    DEFINE_BLEND_CASE(DARKEN     ,base_img, top_img);
+    DEFINE_BLEND_CASE(DIVIDE     ,base_img, top_img);
+    DEFINE_BLEND_CASE(HUE        ,base_img, top_img);
+    DEFINE_BLEND_CASE(LIGHTEN    ,base_img, top_img);
+    DEFINE_BLEND_CASE(LUMINOSITY ,base_img, top_img);
+    DEFINE_BLEND_CASE(MULTIPLY   ,base_img, top_img);
+    DEFINE_BLEND_CASE(OVERLAY    ,base_img, top_img);
+    DEFINE_BLEND_CASE(SATURATION ,base_img, top_img);
+    DEFINE_BLEND_CASE(SCREEN     ,base_img, top_img);
+    DEFINE_BLEND_CASE(SOFT_LIGHT ,base_img, top_img);
+    DEFINE_BLEND_CASE(HARD_LIGHT ,base_img, top_img);
+    default:
+      fprintf(stderr, "invalid op '%c'\n", op);
+      goto clean;
+    }
+    fprintf(stderr, "'%c' -> %s\n", op, argv[cur - 1]);
+    free_imgf32(top_img);
+    top_img = NULL;
   }
-
-  int width = img1->width, height = img1->height;
-
-  //printf("here\n");
-  char op = argv[2][0];
-  switch (op) {
-  DEFINE_BLEND_CASE(NORMAL     ,img1, img2);
-  DEFINE_BLEND_CASE(NONE       ,img1, img2);
-  DEFINE_BLEND_CASE(ADDITION   ,img1, img2);
-  DEFINE_BLEND_CASE(COLOR      ,img1, img2);
-  DEFINE_BLEND_CASE(COLOR_DODGE,img1, img2);
-  DEFINE_BLEND_CASE(DIFFERENCE ,img1, img2);
-  DEFINE_BLEND_CASE(DARKEN     ,img1, img2);
-  DEFINE_BLEND_CASE(DIVIDE     ,img1, img2);
-//  DEFINE_BLEND_CASE(ERASE      ,img1, img2);
-  DEFINE_BLEND_CASE(LIGHTEN    ,img1, img2);
-  DEFINE_BLEND_CASE(LUMINOSITY ,img1, img2);
-  DEFINE_BLEND_CASE(MULTIPLY   ,img1, img2);
-//  DEFINE_BLEND_CASE(OVERLAY    ,img1, img2);
-//  DEFINE_BLEND_CASE(SATURATION ,img1, img2);
-  DEFINE_BLEND_CASE(SCREEN     ,img1, img2);
-  DEFINE_BLEND_CASE(SOFT_LIGHT ,img1, img2);
-  DEFINE_BLEND_CASE(HARD_LIGHT ,img1, img2);
-  default:
-    fprintf(stderr, "invalid op '%c'\n", op);
-    goto clean;
-  }
-  write_pngf32(img1, stdout);
+  write_pngf32(base_img, stdout);
 #ifdef FFDEBUG
   for (int x = 0; x < 10; x++) {
-    float32_t *dpx = img1->rows[0] + x*4;
-    float32_t *spx = img2->rows[0] + x*4;
+    float32_t *dpx = base_img->rows[0] + x*4;
+    float32_t *spx = top_img->rows[0] + x*4;
     //fprintf(stderr, "r %f g %f b %f a %f \n", dpx[0], dpx[1], dpx[2], dpx[3]);
   }
 #endif /* FFDEBUG */
 
 clean:
-  if (img1 != NULL)
-    free_imgf32(img1);
-  if (img2 != NULL)
-    free_imgf32(img2);
+  if (base_img != NULL)
+    free_imgf32(base_img);
+  if (top_img != NULL)
+    free_imgf32(top_img);
 
   return ret;
 }
