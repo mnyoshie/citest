@@ -2,6 +2,9 @@ a.out
 *.png
 *.ts
 
+*.tar.*
+*.zip
+
 flattened
 credits
 fflatten
