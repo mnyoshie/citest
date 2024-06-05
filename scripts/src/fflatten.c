@@ -1,6 +1,6 @@
 /* fflaten.c - fast flatten
  *
- * Copyright (C) 2024 Minato Yoshie
+ * Copyright (C) 2024 Minato Yoshie & Al-buharie Amjari
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
