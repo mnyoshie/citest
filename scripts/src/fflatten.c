@@ -1051,7 +1051,7 @@ int main(int argc, char *argv[]) {
   int  ret = 1;
   if (argc == 2 && !strcmp(argv[1], "license")) {
     fprintf(stderr, 
-       "fflaten Copyright (C) 2024 Minato Yoshie\n"
+       "fflaten Copyright (C) 2024 The Fflatten authors\n"
        "\n"
        "fflatten is free software; you can redistribute it and/or modify it\n"
        "under the terms of the GNU General Public License as published by the\n"
